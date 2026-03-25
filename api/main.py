@@ -39,6 +39,7 @@ RAW_DATA_PATH = ROOT / "data/raw/crime_incidents.csv"
 GRID_PATH = ROOT / "data/processed/current_risk_grid.csv"
 FORECAST_PATH = ROOT / "data/processed/risk_forecast.csv"
 WEB_DIR = ROOT / "web"
+ROOT_INDEX_PATH = ROOT / "index.html"
 
 
 class PredictRequest(BaseModel):
@@ -279,11 +280,14 @@ async def retrain(file: UploadFile | None = File(default=None)) -> dict:
 
 if WEB_DIR.exists():
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+    app.mount("/web", StaticFiles(directory=WEB_DIR), name="web")
 
 
 @app.get("/")
 def landing_page() -> FileResponse:
+    if ROOT_INDEX_PATH.exists():
+        return FileResponse(ROOT_INDEX_PATH)
     index_path = WEB_DIR / "index.html"
-    if not index_path.exists():
-        raise HTTPException(status_code=404, detail="Frontend not found")
-    return FileResponse(index_path)
+    if index_path.exists():
+        return FileResponse(index_path)
+    raise HTTPException(status_code=404, detail="Frontend not found")
