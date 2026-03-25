@@ -81,8 +81,9 @@
   </div>
   </div>
 
+  <script src="./api-config.js"></script>
   <script>
-    const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : '';
+    const API_BASE = window.CPA_API_BASE || '';
     async function getIncidents() {
       const r = await fetch(`${API_BASE}/incidents?limit=5000`);
       if (!r.ok) throw new Error(await r.text());
@@ -126,6 +127,10 @@
     }
 
     async function init() {
+      if (window.CPA_API_NEEDS_RENDER_URL) {
+        alert('Set your Render backend URL in web/api-config.js (RENDER_API_BASE) before using this site on GitHub Pages.');
+        return;
+      }
       try {
         const rows = await getIncidents();
         document.getElementById('count').textContent = String(rows.length);

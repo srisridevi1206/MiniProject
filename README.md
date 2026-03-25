@@ -170,6 +170,43 @@ http://127.0.0.1:8000
 
 This mounts local `data/` and `models/` folders so retraining outputs persist.
 
+## Deploy: GitHub Pages + Render
+
+This project supports a split deployment model:
+
+- Frontend on GitHub Pages
+- FastAPI backend on Render
+
+### 1. Deploy backend to Render
+
+This repository now includes `render.yaml` with build/start settings and health checks.
+
+In Render:
+
+1. Create a new Web Service from this repository.
+2. Render auto-detects `render.yaml`.
+3. Deploy.
+4. Copy your service URL, for example: `https://your-service-name.onrender.com`.
+
+### 2. Set frontend API URL
+
+Open `web/api-config.js` and set:
+
+```js
+var RENDER_API_BASE = "https://your-service-name.onrender.com";
+```
+
+Then commit and push. GitHub Pages pages will call this backend automatically.
+
+### 3. CORS configuration
+
+Backend CORS now supports environment variables:
+
+- `CORS_ALLOW_ORIGINS` (comma-separated exact origins)
+- `CORS_ALLOW_ORIGIN_REGEX` (regex for allowed origins)
+
+Default local origins are already included for local development.
+
 Intensity form:
 
 $$

@@ -1,6 +1,7 @@
 from datetime import datetime
 from io import StringIO
 from pathlib import Path
+import os
 import sys
 import random
 
@@ -21,14 +22,24 @@ from crime_risk.pipeline import load_incident_data, summarize_quality
 from crime_risk.data import generate_synthetic_crime_data
 
 app = FastAPI(title="Crime High-Risk Zone Prediction API", version="0.1.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+
+
+def _cors_allow_origins() -> list[str]:
+    defaults = [
         "http://127.0.0.1:5500",
         "http://localhost:5500",
         "http://127.0.0.1:8000",
         "http://localhost:8000",
-    ],
+    ]
+    raw = os.getenv("CORS_ALLOW_ORIGINS", "")
+    extras = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return list(dict.fromkeys(defaults + extras))
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_allow_origins(),
+    allow_origin_regex=os.getenv("CORS_ALLOW_ORIGIN_REGEX", r"https://.*\.github\.io") or None,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
