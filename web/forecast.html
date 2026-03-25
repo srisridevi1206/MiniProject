@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Risk Zone Prediction Forecast</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { margin: 0; font-family: "Space Grotesk", sans-serif; color: #e8f0ff; background: linear-gradient(160deg, #07111f, #102845); min-height: 100vh; padding: 18px; }
+    .sidebar { position: fixed; left: 18px; top: 18px; width: 228px; background: rgba(9,27,47,0.88); border: 1px solid rgba(116,168,211,0.35); border-radius: 16px; padding: 14px; backdrop-filter: blur(8px); }
+    .brand { font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; }
+    .nav { display: grid; gap: 8px; }
+    .nav a { text-decoration: none; color: #e8f0ff; border: 1px solid rgba(159,181,213,0.3); border-radius: 10px; padding: 8px 10px; font-size: 0.85rem; background: rgba(9,31,55,0.65); }
+    .nav a.active { border-color: rgba(43,227,198,0.6); color: #2be3c6; }
+    .content-wrap { margin-left: 250px; }
+    .crumb { max-width: 1100px; margin: 0 auto 10px; color: #9fb5d5; font-family: "IBM Plex Mono", monospace; font-size: 0.76rem; }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    .top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .top a { color: #2be3c6; text-decoration: none; border: 1px solid rgba(43,227,198,0.4); padding: 6px 10px; border-radius: 999px; }
+    .card { background: rgba(9,27,47,0.75); border: 1px solid rgba(116,168,211,0.35); border-radius: 14px; padding: 16px; margin-top: 14px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: "IBM Plex Mono", monospace; font-size: 12px; }
+    th, td { border-bottom: 1px solid rgba(159,181,213,0.2); padding: 8px; text-align: left; }
+    @media (max-width: 900px) { .sidebar { position: static; width: auto; margin-bottom: 12px; } .content-wrap { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">Crime Risk Modules</div>
+    <nav class="nav">
+      <a href="/">[CC] Command Center</a>
+      <a href="/static/temporal.html">[TM] Temporal</a>
+      <a href="/static/dashboard.html">[DB] Dashboard</a>
+      <a class="active" href="/static/forecast.html">[FC] Forecast</a>
+      <a href="/static/hotspots.html">[HS] Hotspots</a>
+    </nav>
+  </aside>
+
+  <div class="content-wrap">
+  <div class="crumb">Home / Risk Forecast</div>
+  <div class="wrap">
+    <div class="top">
+      <h1>Risk Zone Prediction Forecast</h1>
+      <a href="/">Back to Main</a>
+    </div>
+
+    <div class="card">
+      <h3>Forecast Curve</h3>
+      <canvas id="forecastChart"></canvas>
+    </div>
+
+    <div class="card">
+      <h3>Forecast Table</h3>
+      <table>
+        <thead><tr><th>Forecast Time</th><th>Mean Top20 Risk</th><th>Max Risk</th></tr></thead>
+        <tbody id="forecastBody"></tbody>
+      </table>
+    </div>
+  </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : '';
+
+    async function init() {
+      try {
+        const r = await fetch(`${API_BASE}/forecast?horizon_hours=96&step_hours=12`);
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        const rows = data.rows || [];
+
+        const labels = rows.map(x => new Date(x.forecast_time).toLocaleString());
+        const meanVals = rows.map(x => Number(x.mean_top20_risk));
+        const maxVals = rows.map(x => Number(x.max_risk));
+
+        new Chart(document.getElementById('forecastChart'), {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [
+              { label: 'Mean Top20 Risk', data: meanVals, borderColor: 'rgba(43,227,198,0.9)', backgroundColor: 'rgba(43,227,198,0.2)', tension: 0.25 },
+              { label: 'Max Risk', data: maxVals, borderColor: 'rgba(255,122,89,0.9)', backgroundColor: 'rgba(255,122,89,0.2)', tension: 0.25 }
+            ]
+          },
+          options: { responsive: true }
+        });
+
+        const body = document.getElementById('forecastBody');
+        rows.forEach(x => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${new Date(x.forecast_time).toLocaleString()}</td><td>${Number(x.mean_top20_risk).toFixed(4)}</td><td>${Number(x.max_risk).toFixed(4)}</td>`;
+          body.appendChild(tr);
+        });
+      } catch (e) {
+        alert(`Failed to load forecast: ${e.message}`);
+      }
+    }
+    init();
+  </script>
+</body>
+</html>

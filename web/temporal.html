@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Temporal Analysis - Peak Crime Time</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { margin: 0; font-family: "Space Grotesk", sans-serif; color: #e8f0ff; background: linear-gradient(160deg, #07111f, #102845); min-height: 100vh; padding: 18px; }
+    .sidebar { position: fixed; left: 18px; top: 18px; width: 228px; background: rgba(9,27,47,0.88); border: 1px solid rgba(116,168,211,0.35); border-radius: 16px; padding: 14px; backdrop-filter: blur(8px); }
+    .brand { font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; }
+    .nav { display: grid; gap: 8px; }
+    .nav a { text-decoration: none; color: #e8f0ff; border: 1px solid rgba(159,181,213,0.3); border-radius: 10px; padding: 8px 10px; font-size: 0.85rem; background: rgba(9,31,55,0.65); }
+    .nav a.active { border-color: rgba(43,227,198,0.6); color: #2be3c6; }
+    .content-wrap { margin-left: 250px; }
+    .crumb { max-width: 1200px; margin: 0 auto 10px; color: #9fb5d5; font-family: "IBM Plex Mono", monospace; font-size: 0.76rem; }
+    .wrap { max-width: 1200px; margin: 0 auto; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .top a { color: #2be3c6; text-decoration: none; border: 1px solid rgba(43,227,198,0.4); padding: 6px 10px; border-radius: 999px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+    .card { background: rgba(9,27,47,0.75); border: 1px solid rgba(116,168,211,0.35); border-radius: 14px; padding: 14px; }
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 12px; }
+    .metric { background: rgba(9,31,55,0.75); border: 1px solid rgba(159,181,213,0.2); border-radius: 10px; padding: 10px; }
+    .metric b { display: block; margin-top: 4px; font-family: "IBM Plex Mono", monospace; }
+    .insight { margin-top: 10px; color: #9fb5d5; font-size: 0.88rem; line-height: 1.35; }
+    .pill-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+    .pill { background: rgba(9,31,55,0.75); border: 1px solid rgba(159,181,213,0.2); border-radius: 10px; padding: 8px; font-size: 0.8rem; }
+    .pill b { display: block; margin-top: 5px; color: #2be3c6; }
+    @media (max-width: 900px) { .sidebar { position: static; width: auto; margin-bottom: 12px; } .content-wrap { margin-left: 0; } .grid { grid-template-columns: 1fr; } .metrics { grid-template-columns: 1fr; } .pill-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">Crime Risk Modules</div>
+    <nav class="nav">
+      <a href="/">[CC] Command Center</a>
+      <a class="active" href="/static/temporal.html">[TM] Temporal</a>
+      <a href="/static/dashboard.html">[DB] Dashboard</a>
+      <a href="/static/forecast.html">[FC] Forecast</a>
+      <a href="/static/hotspots.html">[HS] Hotspots</a>
+    </nav>
+  </aside>
+
+  <div class="content-wrap">
+  <div class="crumb">Home / Temporal Analysis</div>
+  <div class="wrap">
+    <div class="top">
+      <h1>Temporal Analysis - Peak Crime Time</h1>
+      <a href="/">Back to Main</a>
+    </div>
+
+    <div class="metrics">
+      <div class="metric">Peak Hour<b id="peakHour">--</b></div>
+      <div class="metric">Peak Day<b id="peakDay">--</b></div>
+      <div class="metric">Incidents Loaded<b id="count">--</b></div>
+    </div>
+
+    <div class="pill-row">
+      <div class="pill">Highest Risk Window<b id="peakWindow">--</b></div>
+      <div class="pill">Lowest Risk Window<b id="lowWindow">--</b></div>
+      <div class="pill">Safer Patrol Window<b id="safeWindow">--</b></div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>Incidents by Hour (24h)</h3>
+        <div class="insight">The highlighted red bar marks the most active hour. Use this to schedule peak patrol coverage.</div>
+        <canvas id="hourChart"></canvas>
+      </div>
+      <div class="card">
+        <h3>Incidents by Day of Week</h3>
+        <div class="insight">Compare weekday and weekend intensity to allocate manpower and response units.</div>
+        <canvas id="dayChart"></canvas>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : '';
+    async function getIncidents() {
+      const r = await fetch(`${API_BASE}/incidents?limit=5000`);
+      if (!r.ok) throw new Error(await r.text());
+      const data = await r.json();
+      return data.rows || [];
+    }
+
+    function drawChart(id, labels, values, color, peakIndex) {
+      new Chart(document.getElementById(id), {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            data: values,
+            backgroundColor: values.map((_, i) => (i === peakIndex ? 'rgba(255, 61, 61, 0.95)' : color)),
+            borderRadius: 6
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => ` Incidents: ${ctx.parsed.y}`
+              }
+            }
+          },
+          scales: {
+            x: { title: { display: true, text: id === 'hourChart' ? 'Hour of Day' : 'Day of Week' } },
+            y: { title: { display: true, text: 'Incident Count' }, beginAtZero: true }
+          }
+        }
+      });
+    }
+
+    function formatWindow(hourIndex) {
+      const start = String(hourIndex).padStart(2, '0');
+      const end = String((hourIndex + 1) % 24).padStart(2, '0');
+      return `${start}:00-${end}:00`;
+    }
+
+    async function init() {
+      try {
+        const rows = await getIncidents();
+        document.getElementById('count').textContent = String(rows.length);
+
+        const hours = Array.from({ length: 24 }, () => 0);
+        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const days = [0, 0, 0, 0, 0, 0, 0];
+
+        rows.forEach(r => {
+          const d = new Date(r.timestamp);
+          if (!Number.isNaN(d.getTime())) {
+            hours[d.getHours()] += 1;
+            const normalized = d.getDay() === 0 ? 6 : d.getDay() - 1;
+            days[normalized] += 1;
+          }
+        });
+
+        const peakHour = hours.indexOf(Math.max(...hours));
+        const lowHour = hours.indexOf(Math.min(...hours));
+        const peakDay = dayNames[days.indexOf(Math.max(...days))];
+        document.getElementById('peakHour').textContent = formatWindow(peakHour);
+        document.getElementById('peakDay').textContent = peakDay;
+        document.getElementById('peakWindow').textContent = formatWindow(peakHour);
+        document.getElementById('lowWindow').textContent = formatWindow(lowHour);
+
+        const sortedHours = hours
+          .map((value, index) => ({ value, index }))
+          .sort((a, b) => a.value - b.value)
+          .slice(0, 3)
+          .map(x => formatWindow(x.index));
+        document.getElementById('safeWindow').textContent = sortedHours.join(', ');
+
+        drawChart('hourChart', hours.map((_, i) => String(i).padStart(2, '0')), hours, 'rgba(255, 122, 89, 0.8)', peakHour);
+        drawChart('dayChart', dayNames, days, 'rgba(43, 227, 198, 0.75)', dayNames.indexOf(peakDay));
+      } catch (e) {
+        alert(`Failed to load temporal data: ${e.message}`);
+      }
+    }
+    init();
+  </script>
+</body>
+</html>

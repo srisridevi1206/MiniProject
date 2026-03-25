@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hotspot Identification</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <style>
+    body { margin: 0; font-family: "Space Grotesk", sans-serif; color: #e8f0ff; background: linear-gradient(160deg, #07111f, #102845); padding: 18px; }
+    .sidebar { position: fixed; left: 18px; top: 18px; width: 228px; background: rgba(9,27,47,0.88); border: 1px solid rgba(116,168,211,0.35); border-radius: 16px; padding: 14px; backdrop-filter: blur(8px); }
+    .brand { font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; }
+    .nav { display: grid; gap: 8px; }
+    .nav a { text-decoration: none; color: #e8f0ff; border: 1px solid rgba(159,181,213,0.3); border-radius: 10px; padding: 8px 10px; font-size: 0.85rem; background: rgba(9,31,55,0.65); }
+    .nav a.active { border-color: rgba(43,227,198,0.6); color: #2be3c6; }
+    .content-wrap { margin-left: 250px; }
+    .crumb { max-width: 1200px; margin: 0 auto 10px; color: #9fb5d5; font-family: "IBM Plex Mono", monospace; font-size: 0.76rem; }
+    .wrap { max-width: 1200px; margin: 0 auto; }
+    .top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .top a { color: #2be3c6; text-decoration: none; border: 1px solid rgba(43,227,198,0.4); padding: 6px 10px; border-radius: 999px; }
+    .card { background: rgba(9,27,47,0.75); border: 1px solid rgba(116,168,211,0.35); border-radius: 14px; padding: 10px; margin-top: 14px; }
+    #map { height: 620px; border-radius: 12px; }
+    @media (max-width: 900px) { .sidebar { position: static; width: auto; margin-bottom: 12px; } .content-wrap { margin-left: 0; } }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">Crime Risk Modules</div>
+    <nav class="nav">
+      <a href="/">[CC] Command Center</a>
+      <a href="/static/temporal.html">[TM] Temporal</a>
+      <a href="/static/dashboard.html">[DB] Dashboard</a>
+      <a href="/static/forecast.html">[FC] Forecast</a>
+      <a class="active" href="/static/hotspots.html">[HS] Hotspots</a>
+    </nav>
+  </aside>
+
+  <div class="content-wrap">
+  <div class="crumb">Home / Hotspot Identification</div>
+  <div class="wrap">
+    <div class="top">
+      <h1>Hotspot Identification - Crime Hotspot Areas</h1>
+      <a href="/">Back to Main</a>
+    </div>
+    <div class="card"><div id="map"></div></div>
+  </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : '';
+    const map = L.map('map').setView([17.385, 78.486], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
+    async function init() {
+      try {
+        const gridResp = await fetch(`${API_BASE}/grid?grid_steps=40`);
+        if (!gridResp.ok) throw new Error(await gridResp.text());
+        const grid = await gridResp.json();
+        const rows = (grid.rows || []).sort((a, b) => Number(b.risk_score) - Number(a.risk_score)).slice(0, 450);
+
+        if (rows.length > 0) {
+          map.setView([Number(rows[0].latitude), Number(rows[0].longitude)], 11);
+        }
+
+        rows.forEach(cell => {
+          const score = Number(cell.risk_score);
+          L.circle([Number(cell.latitude), Number(cell.longitude)], {
+            radius: 80,
+            stroke: false,
+            fillOpacity: Math.min(0.85, score / 10),
+            fillColor: '#ff3d3d'
+          }).bindTooltip(`Risk: ${score.toFixed(4)}`).addTo(map);
+        });
+      } catch (e) {
+        alert(`Failed to load hotspots: ${e.message}`);
+      }
+    }
+    init();
+  </script>
+</body>
+</html>

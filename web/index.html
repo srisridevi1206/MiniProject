@@ -38,6 +38,57 @@
       padding: 18px;
     }
 
+    .sidebar {
+      position: fixed;
+      left: 18px;
+      top: 18px;
+      width: 228px;
+      background: rgba(9, 27, 47, 0.88);
+      border: 1px solid rgba(116, 168, 211, 0.35);
+      border-radius: 16px;
+      padding: 14px;
+      backdrop-filter: blur(8px);
+    }
+
+    .brand {
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 10px;
+    }
+
+    .nav {
+      display: grid;
+      gap: 8px;
+    }
+
+    .nav a {
+      text-decoration: none;
+      color: var(--text);
+      border: 1px solid rgba(159, 181, 213, 0.3);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 0.85rem;
+      background: rgba(9, 31, 55, 0.65);
+    }
+
+    .nav a.active {
+      border-color: rgba(43, 227, 198, 0.6);
+      color: var(--accent);
+    }
+
+    .content-wrap {
+      margin-left: 250px;
+    }
+
+    .crumb {
+      max-width: 1320px;
+      margin: 0 auto 10px;
+      color: var(--muted);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.76rem;
+      letter-spacing: 0.02em;
+    }
+
     .grid {
       display: grid;
       gap: 16px;
@@ -186,9 +237,47 @@
       font-size: 0.75rem;
     }
 
+    .module-links {
+      grid-column: 1 / -1;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+
+    .module-links a {
+      text-decoration: none;
+      color: var(--text);
+      background: rgba(9, 31, 55, 0.7);
+      border: 1px solid rgba(159, 181, 213, 0.3);
+      border-radius: 11px;
+      padding: 10px;
+      text-align: center;
+      font-weight: 600;
+    }
+
+    .module-links a:hover {
+      border-color: rgba(43, 227, 198, 0.65);
+      color: var(--accent);
+    }
+
     @media (max-width: 980px) {
       .grid {
         grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        width: auto;
+        margin-bottom: 12px;
+      }
+
+      .content-wrap {
+        margin-left: 0;
+      }
+
+      .module-links {
+        grid-template-columns: 1fr 1fr;
       }
 
       #map {
@@ -209,10 +298,30 @@
   </style>
 </head>
 <body>
+  <aside class="sidebar">
+    <div class="brand">Crime Risk Modules</div>
+    <nav class="nav">
+      <a class="active" href="/">[CC] Command Center</a>
+      <a href="/static/temporal.html">[TM] Temporal</a>
+      <a href="/static/dashboard.html">[DB] Dashboard</a>
+      <a href="/static/forecast.html">[FC] Forecast</a>
+      <a href="/static/hotspots.html">[HS] Hotspots</a>
+    </nav>
+  </aside>
+
+  <div class="content-wrap">
+  <div class="crumb">Home / Command Center</div>
   <main class="grid">
     <section class="panel header">
       <h1>Crime Pattern Analysis and High-Risk Zone Prediction</h1>
       <p class="subtitle">Live geo-spatial command center backed by a self-exciting risk model</p>
+    </section>
+
+    <section class="panel module-links">
+      <a href="/static/temporal.html">1. Temporal Data - Peak Crime Time</a>
+      <a href="/static/dashboard.html">2. Interactive Dashboard</a>
+      <a href="/static/forecast.html">3. Risk Zone Prediction Forecast</a>
+      <a href="/static/hotspots.html">4. Hotspot Identification</a>
     </section>
 
     <section class="panel map-shell">
@@ -259,6 +368,7 @@
       </article>
     </section>
   </main>
+  </div>
 
   <script>
     const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : '';
