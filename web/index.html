@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crime Risk Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <style>
+    :root {
+      --bg-1: #07111f;
+      --bg-2: #102845;
+      --panel: rgba(9, 27, 47, 0.74);
+      --panel-border: rgba(116, 168, 211, 0.33);
+      --text: #e8f0ff;
+      --muted: #9fb5d5;
+      --accent: #2be3c6;
+      --hot: #ff7a59;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: "Space Grotesk", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 12% 18%, rgba(43, 227, 198, 0.22), transparent 34%),
+        radial-gradient(circle at 86% 82%, rgba(255, 122, 89, 0.2), transparent 33%),
+        linear-gradient(155deg, var(--bg-1), var(--bg-2));
+      min-height: 100vh;
+      padding: 18px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: 1.3fr 1fr;
+      max-width: 1320px;
+      margin: 0 auto;
+      animation: fadeUp 500ms ease;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--panel-border);
+      border-radius: 18px;
+      backdrop-filter: blur(8px);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .header {
+      padding: 20px;
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    h1 {
+      font-size: clamp(1.2rem, 2.5vw, 2rem);
+      letter-spacing: 0.01em;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.82rem;
+    }
+
+    #map {
+      height: 530px;
+      border-radius: 18px;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .map-shell {
+      padding: 8px;
+    }
+
+    .side {
+      display: grid;
+      gap: 16px;
+      grid-template-rows: auto auto auto 1fr;
+    }
+
+    .card {
+      padding: 16px;
+    }
+
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 10px;
+    }
+
+    label {
+      color: var(--muted);
+      font-size: 0.82rem;
+      display: block;
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid rgba(159, 181, 213, 0.35);
+      padding: 9px 11px;
+      background: rgba(5, 18, 35, 0.74);
+      color: var(--text);
+      font-family: "IBM Plex Mono", monospace;
+    }
+
+    button {
+      margin-top: 12px;
+      width: 100%;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(90deg, var(--hot), #ffb85e);
+      color: #031428;
+      font-weight: 700;
+      padding: 10px;
+      cursor: pointer;
+      transition: transform 130ms ease;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button-secondary {
+      background: linear-gradient(90deg, #2be3c6, #74a8d3);
+      color: #031428;
+    }
+
+    .metric {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      padding: 7px 8px;
+      border-radius: 10px;
+      background: rgba(9, 31, 55, 0.7);
+      border: 1px solid rgba(159, 181, 213, 0.15);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.82rem;
+    }
+
+    #forecastList {
+      margin-top: 10px;
+      max-height: 198px;
+      overflow: auto;
+      display: grid;
+      gap: 8px;
+      padding-right: 2px;
+    }
+
+    .forecast-item {
+      border-left: 3px solid var(--accent);
+      background: rgba(4, 21, 40, 0.8);
+      border-radius: 7px;
+      padding: 8px;
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.77rem;
+      color: var(--muted);
+    }
+
+    .chip {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      border: 1px solid rgba(43, 227, 198, 0.45);
+      color: var(--accent);
+      font-family: "IBM Plex Mono", monospace;
+      font-size: 0.75rem;
+    }
+
+    @media (max-width: 980px) {
+      .grid {
+        grid-template-columns: 1fr;
+      }
+
+      #map {
+        height: 420px;
+      }
+    }
+
+    @keyframes fadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="grid">
+    <section class="panel header">
+      <h1>Crime Pattern Analysis and High-Risk Zone Prediction</h1>
+      <p class="subtitle">Live geo-spatial command center backed by a self-exciting risk model</p>
+    </section>
+
+    <section class="panel map-shell">
+      <div id="map"></div>
+    </section>
+
+    <section class="side">
+      <article class="panel card">
+        <h2>Point Risk Query</h2>
+        <div class="row">
+          <div>
+            <label for="lat">Latitude</label>
+            <input id="lat" type="number" step="0.0001" />
+          </div>
+          <div>
+            <label for="lon">Longitude</label>
+            <input id="lon" type="number" step="0.0001" />
+          </div>
+        </div>
+        <button id="predictBtn">Predict Risk</button>
+        <div class="metric"><span>Risk Score</span><strong id="riskScore">--</strong></div>
+        <span class="chip" id="modelState">Checking model state...</span>
+      </article>
+
+      <article class="panel card">
+        <h2>Operational Snapshot</h2>
+        <div class="metric"><span>Incident Points Loaded</span><strong id="incidentCount">--</strong></div>
+        <div class="metric"><span>Grid Cells Scored</span><strong id="gridCount">--</strong></div>
+        <div class="metric"><span>Reference Time</span><strong id="referenceTime">--</strong></div>
+      </article>
+
+      <article class="panel card">
+        <h2>Retrain Model</h2>
+        <label for="csvFile">Upload CSV (timestamp, latitude, longitude)</label>
+        <input id="csvFile" type="file" accept=".csv" />
+        <button id="retrainBtn" class="button-secondary">Upload + Retrain</button>
+        <button id="retrainExistingBtn">Retrain with Current Data</button>
+        <span class="chip" id="retrainStatus">Idle</span>
+      </article>
+
+      <article class="panel card">
+        <h2>Forecast Trend</h2>
+        <div id="forecastList"></div>
+      </article>
+    </section>
+  </main>
+
+  <script>
+    const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : '';
+
+    const map = L.map('map', { zoomControl: true }).setView([17.385, 78.486], 11);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let incidentsLayer = null;
+    let riskLayer = null;
+
+    async function fetchJson(url, options = {}) {
+      const fullUrl = `${API_BASE}${url}`;
+      const response = await fetch(fullUrl, options);
+      if (!response.ok) {
+        const text = await response.text();
+        let detail = text;
+        try {
+          const parsed = JSON.parse(text);
+          detail = parsed.detail || parsed.message || text;
+        } catch (_) {
+          detail = text;
+        }
+        throw new Error(detail || `Request failed: ${response.status}`);
+      }
+      return response.json();
+    }
+
+    function setModelChip(isAvailable) {
+      const chip = document.getElementById('modelState');
+      chip.textContent = isAvailable ? 'Model is loaded' : 'Model not trained yet';
+      chip.style.borderColor = isAvailable ? 'rgba(43, 227, 198, 0.45)' : 'rgba(255, 122, 89, 0.65)';
+      chip.style.color = isAvailable ? 'var(--accent)' : 'var(--hot)';
+    }
+
+    function drawIncidents(rows) {
+      if (incidentsLayer) {
+        incidentsLayer.remove();
+      }
+      const points = rows.map(r => [Number(r.latitude), Number(r.longitude)]);
+      incidentsLayer = L.layerGroup(
+        points.slice(0, 1500).map(p => L.circleMarker(p, {
+          radius: 3,
+          color: '#ffb85e',
+          weight: 0.6,
+          fillColor: '#ff7a59',
+          fillOpacity: 0.4
+        }))
+      );
+      incidentsLayer.addTo(map);
+    }
+
+    function drawRiskGrid(rows) {
+      if (riskLayer) {
+        riskLayer.remove();
+      }
+
+      const top = [...rows].sort((a, b) => b.risk_score - a.risk_score).slice(0, 350);
+      riskLayer = L.layerGroup(
+        top.map(cell => L.circle([Number(cell.latitude), Number(cell.longitude)], {
+          radius: 75,
+          stroke: false,
+          fillOpacity: Math.min(0.85, Number(cell.risk_score) / 10),
+          fillColor: '#ff3d3d'
+        }))
+      );
+      riskLayer.addTo(map);
+    }
+
+    function renderForecast(rows) {
+      const container = document.getElementById('forecastList');
+      container.innerHTML = '';
+      rows.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'forecast-item';
+        const t = new Date(item.forecast_time).toLocaleString();
+        el.textContent = `${t} | mean-top20=${Number(item.mean_top20_risk).toFixed(3)} | max=${Number(item.max_risk).toFixed(3)}`;
+        container.appendChild(el);
+      });
+    }
+
+    async function refreshDashboardData(modelAvailable) {
+      const incidents = await fetchJson('/incidents?limit=2500');
+      const points = incidents.rows || [];
+      document.getElementById('incidentCount').textContent = String(points.length);
+      drawIncidents(points);
+
+      if (points.length > 0) {
+        const first = points[0];
+        const lat = Number(first.latitude);
+        const lon = Number(first.longitude);
+        document.getElementById('lat').value = lat.toFixed(4);
+        document.getElementById('lon').value = lon.toFixed(4);
+        map.setView([lat, lon], 11);
+      }
+
+      if (!modelAvailable) {
+        document.getElementById('gridCount').textContent = '--';
+        document.getElementById('referenceTime').textContent = '--';
+        document.getElementById('forecastList').innerHTML = '';
+        return;
+      }
+
+      const grid = await fetchJson('/grid?grid_steps=35');
+      const cells = grid.rows || [];
+      document.getElementById('gridCount').textContent = String(cells.length);
+      document.getElementById('referenceTime').textContent = new Date(grid.reference_time).toLocaleString();
+      drawRiskGrid(cells);
+
+      const forecast = await fetchJson('/forecast?horizon_hours=72&step_hours=12');
+      renderForecast(forecast.rows || []);
+    }
+
+    async function bootstrap() {
+      try {
+        const health = await fetchJson('/health');
+        const modelAvailable = Boolean(health.model_available);
+        setModelChip(modelAvailable);
+        await refreshDashboardData(modelAvailable);
+      } catch (err) {
+        console.error(err);
+        alert('Unable to load dashboard data. Train the model first and refresh.');
+      }
+    }
+
+    document.getElementById('predictBtn').addEventListener('click', async () => {
+      const lat = Number(document.getElementById('lat').value);
+      const lon = Number(document.getElementById('lon').value);
+
+      try {
+        const response = await fetchJson('/predict', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude: lat, longitude: lon })
+        });
+
+        document.getElementById('riskScore').textContent = Number(response.risk_score).toFixed(4);
+      } catch (err) {
+        console.error(err);
+        alert('Prediction failed. Ensure the model is available.');
+      }
+    });
+
+    async function handleRetrain(useUpload) {
+      const status = document.getElementById('retrainStatus');
+      status.textContent = 'Retraining in progress...';
+
+      try {
+        let options = { method: 'POST' };
+        if (useUpload) {
+          const fileInput = document.getElementById('csvFile');
+          if (!fileInput.files || fileInput.files.length === 0) {
+            alert('Choose a CSV file first.');
+            status.textContent = 'Idle';
+            return;
+          }
+          const formData = new FormData();
+          formData.append('file', fileInput.files[0]);
+          options.body = formData;
+        }
+
+        const response = await fetchJson('/retrain', options);
+        status.textContent = `Done: ${response.incident_count} incidents`; 
+
+        const health = await fetchJson('/health');
+        setModelChip(Boolean(health.model_available));
+        await refreshDashboardData(Boolean(health.model_available));
+      } catch (err) {
+        console.error(err);
+        status.textContent = 'Retrain failed';
+        alert(`Retraining failed: ${err.message}`);
+      }
+    }
+
+    document.getElementById('retrainBtn').addEventListener('click', async () => {
+      await handleRetrain(true);
+    });
+
+    document.getElementById('retrainExistingBtn').addEventListener('click', async () => {
+      await handleRetrain(false);
+    });
+
+    bootstrap();
+  </script>
+</body>
+</html>

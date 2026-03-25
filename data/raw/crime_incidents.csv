@@ -1,0 +1,4 @@
+timestamp,latitude,longitude,crime_type
+2026-03-25 10:00:00,51.5719,4.7683,theft
+2026-03-25 11:30:00,51.5725,4.769,burglary
+2026-03-25 13:15:00,51.573,4.7701,vandalism
