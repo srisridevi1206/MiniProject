@@ -10,13 +10,13 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <style>
-    body { margin: 0; font-family: "Space Grotesk", sans-serif; color: #e8f0ff; background: linear-gradient(160deg, #07111f, #102845); min-height: 100vh; padding: 18px; }
-    .sidebar { position: fixed; left: 18px; top: 18px; width: 228px; background: rgba(9,27,47,0.88); border: 1px solid rgba(116,168,211,0.35); border-radius: 16px; padding: 14px; backdrop-filter: blur(8px); }
+    body { margin: 0; font-family: "Space Grotesk", sans-serif; color: #e8f0ff; background: linear-gradient(160deg, #07111f, #102845); min-height: 100vh; padding: 18px; display: grid; grid-template-columns: 228px minmax(0, 1fr); gap: 14px; }
+    .sidebar { position: sticky; top: 18px; height: fit-content; background: rgba(9,27,47,0.88); border: 1px solid rgba(116,168,211,0.35); border-radius: 16px; padding: 14px; backdrop-filter: blur(8px); }
     .brand { font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; }
     .nav { display: grid; gap: 8px; }
     .nav a { text-decoration: none; color: #e8f0ff; border: 1px solid rgba(159,181,213,0.3); border-radius: 10px; padding: 8px 10px; font-size: 0.85rem; background: rgba(9,31,55,0.65); }
     .nav a.active { border-color: rgba(43,227,198,0.6); color: #2be3c6; }
-    .content-wrap { margin-left: 250px; }
+    .content-wrap { min-width: 0; }
     .crumb { max-width: 1300px; margin: 0 auto 10px; color: #9fb5d5; font-family: "IBM Plex Mono", monospace; font-size: 0.76rem; }
     .wrap { max-width: 1300px; margin: 0 auto; }
     .top { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
@@ -24,12 +24,16 @@
     .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 14px; }
     .metric { background: rgba(9,31,55,0.72); border: 1px solid rgba(159,181,213,0.2); border-radius: 10px; padding: 10px; }
     .metric b { display: block; margin-top: 4px; font-family: "IBM Plex Mono", monospace; }
-    .layout { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; margin-top: 14px; }
+    .layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 14px; margin-top: 14px; }
     .card { background: rgba(9,27,47,0.75); border: 1px solid rgba(116,168,211,0.35); border-radius: 14px; padding: 12px; }
     #map { height: 560px; border-radius: 10px; }
     table { width: 100%; border-collapse: collapse; margin-top: 10px; font-family: "IBM Plex Mono", monospace; font-size: 12px; }
     th, td { border-bottom: 1px solid rgba(159,181,213,0.2); padding: 8px; text-align: left; }
-    @media (max-width: 980px) { .sidebar { position: static; width: auto; margin-bottom: 12px; } .content-wrap { margin-left: 0; } .metrics { grid-template-columns: 1fr 1fr; } .layout { grid-template-columns: 1fr; } }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    input { width: 100%; border-radius: 8px; border: 1px solid rgba(159,181,213,0.3); padding: 8px; background: rgba(9,31,55,0.6); color: #e8f0ff; }
+    .btn { margin-top: 8px; border: 1px solid rgba(43,227,198,0.5); color: #2be3c6; background: rgba(9,31,55,0.7); border-radius: 10px; padding: 8px 10px; cursor: pointer; }
+    .explain-box { margin-top: 8px; padding: 8px; border: 1px solid rgba(159,181,213,0.2); border-radius: 8px; background: rgba(9,31,55,0.6); color: #9fb5d5; font-size: 0.84rem; }
+    @media (max-width: 980px) { body { grid-template-columns: 1fr; } .sidebar { position: static; } .metrics { grid-template-columns: 1fr 1fr; } .layout { grid-template-columns: 1fr; } .field-row { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -41,6 +45,7 @@
       <a class="active" href="/static/dashboard.html">[DB] Dashboard</a>
       <a href="/static/forecast.html">[FC] Forecast</a>
       <a href="/static/hotspots.html">[HS] Hotspots</a>
+      <a href="/static/evaluation.html">[EV] Evaluation</a>
     </nav>
   </aside>
 
@@ -67,6 +72,14 @@
           <thead><tr><th>Time</th><th>Type</th><th>Lat</th><th>Lon</th></tr></thead>
           <tbody id="reportBody"></tbody>
         </table>
+
+        <h3 style="margin-top:12px;">Explainability Card</h3>
+        <div class="field-row">
+          <input id="expLat" type="number" step="0.0001" placeholder="Latitude">
+          <input id="expLon" type="number" step="0.0001" placeholder="Longitude">
+        </div>
+        <button class="btn" id="explainBtn">Explain Risk at Location</button>
+        <div class="explain-box" id="explainOut">Pick a location and click explain.</div>
       </div>
     </div>
   </div>
@@ -99,6 +112,8 @@
 
         if (rows.length) {
           map.setView([Number(rows[0].latitude), Number(rows[0].longitude)], 11);
+          document.getElementById('expLat').value = Number(rows[0].latitude).toFixed(4);
+          document.getElementById('expLon').value = Number(rows[0].longitude).toFixed(4);
         }
 
         rows.slice(0, 1200).forEach(x => {
@@ -121,6 +136,33 @@
         alert(`Failed to load interactive dashboard: ${e.message}`);
       }
     }
+
+    document.getElementById('explainBtn').addEventListener('click', async () => {
+      const lat = Number(document.getElementById('expLat').value);
+      const lon = Number(document.getElementById('expLon').value);
+      const out = document.getElementById('explainOut');
+      out.textContent = 'Loading explanation...';
+      try {
+        const r = await fetch(`${API_BASE}/explain`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude: lat, longitude: lon })
+        });
+        if (!r.ok) throw new Error(await r.text());
+        const data = await r.json();
+        const bg = Number(data.background_risk || 0).toFixed(4);
+        const tr = Number(data.trigger_risk || 0).toFixed(4);
+        if (!data.top_triggers || data.top_triggers.length === 0) {
+          out.textContent = `Background=${bg}, Trigger=${tr}. No dominant recent triggers.`;
+          return;
+        }
+        const top = data.top_triggers[0];
+        out.textContent = `Background=${bg}, Trigger=${tr}. Top trigger: ${new Date(top.timestamp).toLocaleString()} at ${top.distance_km.toFixed(2)} km, ${top.hours_ago.toFixed(1)} hrs ago.`;
+      } catch (e) {
+        out.textContent = `Explainability failed: ${e.message}`;
+      }
+    });
+
     init();
   </script>
 </body>

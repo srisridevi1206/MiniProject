@@ -133,6 +133,61 @@ class SelfExcitingCrimeModel:
         trigger_sum = self.alpha * float(np.sum(temporal * spatial))
         return float(mu + trigger_sum)
 
+    def explain_prediction(
+        self, lat: float, lon: float, timestamp: datetime | pd.Timestamp, top_n: int = 5
+    ) -> dict:
+        if not self.is_fitted:
+            raise RuntimeError("Model is not fitted yet")
+
+        ts = pd.Timestamp(timestamp)
+        mu = self._background_intensity(lat, lon)
+
+        ts_hours = ts.value / 3.6e12
+        dt_hours = ts_hours - self.event_ts_hours
+        mask = (dt_hours > 0) & (dt_hours <= self.config.lookback_hours)
+
+        if not np.any(mask):
+            return {
+                "total_risk": float(mu),
+                "background_risk": float(mu),
+                "trigger_risk": 0.0,
+                "top_triggers": [],
+            }
+
+        dts = dt_hours[mask]
+        lats = self.event_lats[mask]
+        lons = self.event_lons[mask]
+        dists = haversine_km_vector(lat, lon, lats, lons)
+        temporal = np.exp(-self.beta * dts)
+        spatial = np.exp(-(dists**2) / (2 * self.sigma_km**2))
+        contributions = self.alpha * temporal * spatial
+
+        trigger_sum = float(np.sum(contributions))
+        total = float(mu + trigger_sum)
+
+        hist_idx = np.where(mask)[0]
+        top_idx = np.argsort(contributions)[::-1][:top_n]
+        top_triggers = []
+        for i in top_idx:
+            ev = self.events.iloc[hist_idx[i]]
+            top_triggers.append(
+                {
+                    "timestamp": pd.Timestamp(ev["timestamp"]).isoformat(),
+                    "latitude": float(ev["latitude"]),
+                    "longitude": float(ev["longitude"]),
+                    "distance_km": float(dists[i]),
+                    "hours_ago": float(dts[i]),
+                    "contribution": float(contributions[i]),
+                }
+            )
+
+        return {
+            "total_risk": total,
+            "background_risk": float(mu),
+            "trigger_risk": trigger_sum,
+            "top_triggers": top_triggers,
+        }
+
     def score_grid(self, reference_time: datetime | pd.Timestamp, grid_steps: int = 40) -> pd.DataFrame:
         if not self.is_fitted:
             raise RuntimeError("Model is not fitted yet")
@@ -164,11 +219,16 @@ class SelfExcitingCrimeModel:
             t = self.last_event_time + timedelta(hours=h)
             grid = self.score_grid(t, grid_steps=20)
             top = grid.nlargest(20, "risk_score")
+            std_top = float(top["risk_score"].std(ddof=0)) if len(top) > 1 else 0.0
+            ci_margin = 1.28 * std_top / np.sqrt(max(len(top), 1))
+            mean_top = float(top["risk_score"].mean())
             rows.append(
                 {
                     "forecast_time": t,
-                    "mean_top20_risk": float(top["risk_score"].mean()),
+                    "mean_top20_risk": mean_top,
                     "max_risk": float(top["risk_score"].max()),
+                    "lower_ci": float(max(mean_top - ci_margin, 0.0)),
+                    "upper_ci": float(mean_top + ci_margin),
                 }
             )
         return pd.DataFrame(rows)

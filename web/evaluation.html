@@ -1,0 +1,216 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Model Evaluation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; font-family: "Space Grotesk", sans-serif; color: #e8f0ff; background: linear-gradient(160deg, #07111f, #102845); min-height: 100vh; padding: 18px; display: grid; grid-template-columns: 228px minmax(0, 1fr); gap: 14px; }
+    .sidebar { position: sticky; top: 18px; height: fit-content; background: rgba(9,27,47,0.88); border: 1px solid rgba(116,168,211,0.35); border-radius: 16px; padding: 14px; backdrop-filter: blur(8px); }
+    .brand { font-size: 0.95rem; font-weight: 700; margin-bottom: 10px; }
+    .nav { display: grid; gap: 8px; }
+    .nav a { text-decoration: none; color: #e8f0ff; border: 1px solid rgba(159,181,213,0.3); border-radius: 10px; padding: 8px 10px; font-size: 0.85rem; background: rgba(9,31,55,0.65); }
+    .nav a.active { border-color: rgba(43,227,198,0.6); color: #2be3c6; }
+    .content-wrap { min-width: 0; }
+    .crumb { max-width: 1100px; margin: 0 auto 10px; color: #9fb5d5; font-family: "IBM Plex Mono", monospace; font-size: 0.76rem; }
+    .wrap { max-width: 1100px; margin: 0 auto; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .card { background: rgba(9,27,47,0.75); border: 1px solid rgba(116,168,211,0.35); border-radius: 14px; padding: 14px; }
+    .metric { margin-top: 8px; padding: 8px; border-radius: 8px; border: 1px solid rgba(159,181,213,0.2); background: rgba(9,31,55,0.7); display: flex; justify-content: space-between; font-family: "IBM Plex Mono", monospace; font-size: 0.82rem; }
+    .highlight { color: #2be3c6; }
+    .small { color: #9fb5d5; margin-top: 8px; font-size: 0.9rem; }
+    .actions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .btn { background: rgba(9,31,55,0.75); color: #e8f0ff; border: 1px solid rgba(159,181,213,0.35); border-radius: 10px; padding: 8px 12px; cursor: pointer; }
+    .btn.primary { border-color: rgba(43,227,198,0.55); color: #2be3c6; }
+    .notice { margin-top: 10px; padding: 10px; border-radius: 10px; border: 1px solid rgba(159,181,213,0.25); background: rgba(9,31,55,0.65); color: #9fb5d5; }
+    @media (max-width: 980px) { body { grid-template-columns: 1fr; } .sidebar { position: static; } .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">Crime Risk Modules</div>
+    <nav class="nav">
+      <a href="/">[CC] Command Center</a>
+      <a href="/static/temporal.html">[TM] Temporal</a>
+      <a href="/static/dashboard.html">[DB] Dashboard</a>
+      <a href="/static/forecast.html">[FC] Forecast</a>
+      <a href="/static/hotspots.html">[HS] Hotspots</a>
+      <a class="active" href="/static/evaluation.html">[EV] Evaluation</a>
+    </nav>
+  </aside>
+
+  <div class="content-wrap">
+    <div class="crumb">Home / Model Evaluation</div>
+    <div class="wrap">
+      <h1>Model Evaluation and Baseline Comparison</h1>
+      <p class="small">Higher separation ratio and pairwise win-rate indicate better discrimination of true incidents versus random negatives.</p>
+      <div class="actions">
+        <button class="btn primary" id="runEvalBtn">Run Evaluation</button>
+        <button class="btn" id="bootstrapBtn">Generate Demo Data + Retrain</button>
+        <button class="btn" id="downloadJsonBtn">Download JSON</button>
+        <button class="btn" id="downloadCsvBtn">Download CSV</button>
+      </div>
+      <div class="notice" id="evalNotice">Ready.</div>
+
+      <div class="grid" style="margin-top: 14px;">
+        <div class="card">
+          <h3>Self-Exciting Model</h3>
+          <div class="metric"><span>Mean Positive Risk</span><b id="sePos">--</b></div>
+          <div class="metric"><span>Mean Negative Risk</span><b id="seNeg">--</b></div>
+          <div class="metric"><span>Separation Ratio</span><b id="seSep" class="highlight">--</b></div>
+          <div class="metric"><span>Pairwise Win Rate</span><b id="seWin" class="highlight">--</b></div>
+        </div>
+
+        <div class="card">
+          <h3>Static Baseline (Background Only)</h3>
+          <div class="metric"><span>Mean Positive Risk</span><b id="bsPos">--</b></div>
+          <div class="metric"><span>Mean Negative Risk</span><b id="bsNeg">--</b></div>
+          <div class="metric"><span>Separation Ratio</span><b id="bsSep">--</b></div>
+          <div class="metric"><span>Pairwise Win Rate</span><b id="bsWin">--</b></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top: 14px;">
+        <h3>Verdict</h3>
+        <div id="verdict" class="small">Running evaluation...</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : '';
+    let currentEvaluation = null;
+
+    function setText(id, value) {
+      document.getElementById(id).textContent = value;
+    }
+
+    function fmt(x) {
+      return Number(x).toFixed(4);
+    }
+
+    function downloadText(filename, text, mimeType) {
+      const blob = new Blob([text], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function setNotice(message) {
+      document.getElementById('evalNotice').textContent = message;
+    }
+
+    function clearMetrics() {
+      ['sePos', 'seNeg', 'seSep', 'seWin', 'bsPos', 'bsNeg', 'bsSep', 'bsWin'].forEach(id => setText(id, '--'));
+    }
+
+    async function runEvaluation() {
+      setNotice('Running evaluation...');
+      const r = await fetch(`${API_BASE}/evaluate?sample_size=300&seed=42`);
+      if (!r.ok) {
+        throw new Error(await r.text());
+      }
+      const data = await r.json();
+
+      if (!data.ready) {
+        clearMetrics();
+        currentEvaluation = data;
+        document.getElementById('verdict').textContent = `Evaluation needs more data. Available rows: ${data.available_rows}.`;
+        setNotice(data.detail);
+        return;
+      }
+
+      currentEvaluation = data;
+
+      const se = data.self_exciting;
+      const bs = data.baseline_static;
+
+      setText('sePos', fmt(se.mean_positive_risk));
+      setText('seNeg', fmt(se.mean_negative_risk));
+      setText('seSep', fmt(se.separation_ratio));
+      setText('seWin', `${(Number(se.pairwise_win_rate) * 100).toFixed(2)}%`);
+
+      setText('bsPos', fmt(bs.mean_positive_risk));
+      setText('bsNeg', fmt(bs.mean_negative_risk));
+      setText('bsSep', fmt(bs.separation_ratio));
+      setText('bsWin', `${(Number(bs.pairwise_win_rate) * 100).toFixed(2)}%`);
+
+      const improvedSep = Number(se.separation_ratio) > Number(bs.separation_ratio);
+      const improvedWin = Number(se.pairwise_win_rate) > Number(bs.pairwise_win_rate);
+      document.getElementById('verdict').textContent =
+        improvedSep && improvedWin
+          ? 'Self-exciting model outperforms static baseline on both separation and win-rate metrics.'
+          : 'Model improvement over baseline is mixed; consider retraining with richer incident history.';
+      setNotice(`Evaluation completed on ${data.sample_size} holdout samples.`);
+    }
+
+    async function bootstrapDemo() {
+      setNotice('Generating demo data and retraining model...');
+      const r = await fetch(`${API_BASE}/bootstrap-demo?days=90&seed=7`, { method: 'POST' });
+      if (!r.ok) {
+        throw new Error(await r.text());
+      }
+      const payload = await r.json();
+      setNotice(`Demo data ready. Incidents: ${payload.incident_count}, dropped rows: ${payload.quality.dropped_rows}`);
+      await runEvaluation();
+    }
+
+    async function init() {
+      try {
+        await runEvaluation();
+      } catch (e) {
+        document.getElementById('verdict').textContent = `Evaluation failed: ${e.message}`;
+        setNotice('Unable to evaluate right now.');
+      }
+    }
+
+    document.getElementById('runEvalBtn').addEventListener('click', async () => {
+      try {
+        await runEvaluation();
+      } catch (e) {
+        setNotice(`Run failed: ${e.message}`);
+      }
+    });
+
+    document.getElementById('bootstrapBtn').addEventListener('click', async () => {
+      try {
+        await bootstrapDemo();
+      } catch (e) {
+        setNotice(`Bootstrap failed: ${e.message}`);
+      }
+    });
+
+    document.getElementById('downloadJsonBtn').addEventListener('click', () => {
+      if (!currentEvaluation || !currentEvaluation.ready) {
+        setNotice('Run a successful evaluation before downloading JSON.');
+        return;
+      }
+      downloadText('evaluation_report.json', JSON.stringify(currentEvaluation, null, 2), 'application/json');
+    });
+
+    document.getElementById('downloadCsvBtn').addEventListener('click', () => {
+      if (!currentEvaluation || !currentEvaluation.ready) {
+        setNotice('Run a successful evaluation before downloading CSV.');
+        return;
+      }
+      const se = currentEvaluation.self_exciting;
+      const bs = currentEvaluation.baseline_static;
+      const rows = [
+        ['model', 'mean_positive_risk', 'mean_negative_risk', 'separation_ratio', 'pairwise_win_rate'],
+        ['self_exciting', se.mean_positive_risk, se.mean_negative_risk, se.separation_ratio, se.pairwise_win_rate],
+        ['baseline_static', bs.mean_positive_risk, bs.mean_negative_risk, bs.separation_ratio, bs.pairwise_win_rate],
+      ];
+      const csv = rows.map(r => r.join(',')).join('\n');
+      downloadText('evaluation_report.csv', csv, 'text/csv');
+    });
+
+    init();
+  </script>
+</body>
+</html>

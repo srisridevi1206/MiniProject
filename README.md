@@ -6,6 +6,9 @@ This project implements a full geo-spatial crime analytics workflow inspired by 
 - Temporal pattern analysis
 - Dynamic hotspot identification
 - High-risk zone forecasting
+- Model explainability for risk predictions
+- Baseline-vs-model evaluation metrics
+- Data quality guardrails during training/retraining
 - Browser landing page and API inference
 - Optional Streamlit analytics dashboard
 
@@ -100,6 +103,9 @@ streamlit run app/dashboard.py
 - `GET /forecast` : future high-risk trend summary
 - `GET /incidents` : recent incident points for map rendering
 - `POST /retrain` : retrain model using current raw dataset, or upload a CSV file
+- `POST /explain` : decomposition of risk into background and top trigger events
+- `GET /evaluate` : holdout evaluation and baseline comparison metrics
+- `POST /bootstrap-demo` : generate synthetic demo dataset and retrain model
 
 ### Retraining From Browser
 
@@ -107,6 +113,12 @@ Use the landing page to retrain in two ways:
 
 - Upload CSV and retrain: choose a file with `timestamp`, `latitude`, `longitude` columns and click **Upload + Retrain**.
 - Retrain current data: click **Retrain with Current Data** to rebuild artifacts from `data/raw/crime_incidents.csv`.
+
+Retrain response now includes quality stats:
+
+- `input_rows`
+- `valid_rows`
+- `dropped_rows`
 
 Example `POST /predict` payload:
 
@@ -126,6 +138,37 @@ The model uses:
 - Self-exciting trigger term with time decay
 - Gaussian spatial contagion kernel
 - Near-repeat calibration for contagion strength estimation
+- Forecast uncertainty bands (`lower_ci`, `upper_ci`)
+
+## Evaluation
+
+Use `GET /evaluate` to compare:
+
+- Self-exciting model discrimination
+- Static baseline (background-only) discrimination
+
+Reported metrics:
+
+- Mean positive risk
+- Mean negative risk
+- Separation ratio
+- Pairwise win rate
+
+## Docker (One-Command Demo)
+
+Run the complete app in Docker:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+```text
+http://127.0.0.1:8000
+```
+
+This mounts local `data/` and `models/` folders so retraining outputs persist.
 
 Intensity form:
 

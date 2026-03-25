@@ -241,7 +241,7 @@
       grid-column: 1 / -1;
       padding: 14px;
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(5, 1fr);
       gap: 10px;
     }
 
@@ -306,6 +306,7 @@
       <a href="/static/dashboard.html">[DB] Dashboard</a>
       <a href="/static/forecast.html">[FC] Forecast</a>
       <a href="/static/hotspots.html">[HS] Hotspots</a>
+      <a href="/static/evaluation.html">[EV] Evaluation</a>
     </nav>
   </aside>
 
@@ -322,6 +323,7 @@
       <a href="/static/dashboard.html">2. Interactive Dashboard</a>
       <a href="/static/forecast.html">3. Risk Zone Prediction Forecast</a>
       <a href="/static/hotspots.html">4. Hotspot Identification</a>
+      <a href="/static/evaluation.html">5. Model Evaluation</a>
     </section>
 
     <section class="panel map-shell">
@@ -343,6 +345,8 @@
         </div>
         <button id="predictBtn">Predict Risk</button>
         <div class="metric"><span>Risk Score</span><strong id="riskScore">--</strong></div>
+        <div class="metric"><span>Background vs Trigger</span><strong id="riskMix">--</strong></div>
+        <div id="explainBox" class="forecast-item" style="margin-top:8px;">Top trigger events will appear here after prediction.</div>
         <span class="chip" id="modelState">Checking model state...</span>
       </article>
 
@@ -507,6 +511,27 @@
         });
 
         document.getElementById('riskScore').textContent = Number(response.risk_score).toFixed(4);
+
+        const explain = await fetchJson('/explain', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ latitude: lat, longitude: lon })
+        });
+
+        const bg = Number(explain.background_risk || 0);
+        const tr = Number(explain.trigger_risk || 0);
+        const total = Math.max(Number(explain.total_risk || 0), 1e-8);
+        const bgPct = ((bg / total) * 100).toFixed(1);
+        const trPct = ((tr / total) * 100).toFixed(1);
+        document.getElementById('riskMix').textContent = `B:${bgPct}% | T:${trPct}%`;
+
+        const top = explain.top_triggers || [];
+        if (top.length === 0) {
+          document.getElementById('explainBox').textContent = 'No recent trigger events contributed. Risk is mostly background intensity.';
+        } else {
+          const first = top[0];
+          document.getElementById('explainBox').textContent = `Top trigger: ${new Date(first.timestamp).toLocaleString()} | ${first.distance_km.toFixed(2)} km away | ${first.hours_ago.toFixed(1)} hrs ago`;
+        }
       } catch (err) {
         console.error(err);
         alert('Prediction failed. Ensure the model is available.');
