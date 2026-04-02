@@ -281,9 +281,43 @@ if WEB_DIR.exists():
     app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 
+def _serve_web_page(filename: str) -> FileResponse:
+    page_path = WEB_DIR / filename
+    if not page_path.exists():
+        raise HTTPException(status_code=404, detail="Frontend not found")
+    return FileResponse(page_path)
+
+
 @app.get("/")
 def landing_page() -> FileResponse:
-    index_path = WEB_DIR / "index.html"
-    if not index_path.exists():
-        raise HTTPException(status_code=404, detail="Frontend not found")
-    return FileResponse(index_path)
+    return _serve_web_page("index.html")
+
+
+@app.get("/index.html")
+def landing_page_file() -> FileResponse:
+    return _serve_web_page("index.html")
+
+
+@app.get("/temporal.html")
+def temporal_page() -> FileResponse:
+    return _serve_web_page("temporal.html")
+
+
+@app.get("/dashboard.html")
+def dashboard_page() -> FileResponse:
+    return _serve_web_page("dashboard.html")
+
+
+@app.get("/forecast.html")
+def forecast_page() -> FileResponse:
+    return _serve_web_page("forecast.html")
+
+
+@app.get("/hotspots.html")
+def hotspots_page() -> FileResponse:
+    return _serve_web_page("hotspots.html")
+
+
+@app.get("/evaluation.html")
+def evaluation_page() -> FileResponse:
+    return _serve_web_page("evaluation.html")
