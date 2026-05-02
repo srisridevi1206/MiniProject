@@ -359,10 +359,20 @@
 
       <article class="panel card">
         <h2>Retrain Model</h2>
+        
+        <div style="margin-bottom: 12px; padding: 10px; background: rgba(43, 227, 198, 0.1); border-left: 3px solid var(--accent); border-radius: 6px; font-size: 0.80rem; color: var(--muted);">
+          <strong style="color: var(--accent);">Upload + Retrain:</strong> Replace existing data with new CSV file, then retrain the model.
+        </div>
+        
         <label for="csvFile">Upload CSV (timestamp, latitude, longitude)</label>
         <input id="csvFile" type="file" accept=".csv" />
-        <button id="retrainBtn" class="button-secondary">Upload + Retrain</button>
-        <button id="retrainExistingBtn">Retrain with Current Data</button>
+        <button id="retrainBtn" class="button-secondary">📤 Upload + Retrain</button>
+        
+        <div style="margin: 14px 0; padding: 10px; background: rgba(255, 122, 89, 0.1); border-left: 3px solid var(--hot); border-radius: 6px; font-size: 0.80rem; color: var(--muted);">
+          <strong style="color: var(--hot);">Retrain with Current Data:</strong> Keep existing data, just rebuild the model from scratch.
+        </div>
+        
+        <button id="retrainExistingBtn">🔄 Retrain with Current Data</button>
         <span class="chip" id="retrainStatus">Idle</span>
       </article>
 
@@ -375,7 +385,10 @@
   </div>
 
   <script>
-    const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : '';
+    const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : 'http://127.0.0.1:8000';
+    
+    console.log('Page location:', window.location.href);
+    console.log('API_BASE:', API_BASE);
 
     const map = L.map('map', { zoomControl: true }).setView([17.385, 78.486], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -387,19 +400,28 @@
 
     async function fetchJson(url, options = {}) {
       const fullUrl = `${API_BASE}${url}`;
-      const response = await fetch(fullUrl, options);
-      if (!response.ok) {
-        const text = await response.text();
-        let detail = text;
-        try {
-          const parsed = JSON.parse(text);
-          detail = parsed.detail || parsed.message || text;
-        } catch (_) {
-          detail = text;
+      console.log('Fetching:', fullUrl, 'Options:', options);
+      
+      try {
+        const response = await fetch(fullUrl, options);
+        console.log('Response status:', response.status, response.statusText);
+        
+        if (!response.ok) {
+          const text = await response.text();
+          let detail = text;
+          try {
+            const parsed = JSON.parse(text);
+            detail = parsed.detail || parsed.message || text;
+          } catch (_) {
+            detail = text;
+          }
+          throw new Error(detail || `Request failed: ${response.status}`);
         }
-        throw new Error(detail || `Request failed: ${response.status}`);
+        return response.json();
+      } catch (err) {
+        console.error('Fetch error details:', err);
+        throw err;
       }
-      return response.json();
     }
 
     function setModelChip(isAvailable) {
@@ -544,6 +566,7 @@
 
       try {
         let options = { method: 'POST' };
+        
         if (useUpload) {
           const fileInput = document.getElementById('csvFile');
           if (!fileInput.files || fileInput.files.length === 0) {
@@ -556,6 +579,7 @@
           options.body = formData;
         }
 
+        // Use the same fetchJson helper for consistency
         const response = await fetchJson('/retrain', options);
         status.textContent = `Done: ${response.incident_count} incidents`; 
 
@@ -563,7 +587,7 @@
         setModelChip(Boolean(health.model_available));
         await refreshDashboardData(Boolean(health.model_available));
       } catch (err) {
-        console.error(err);
+        console.error('Retrain error:', err);
         status.textContent = 'Retrain failed';
         alert(`Retraining failed: ${err.message}`);
       }

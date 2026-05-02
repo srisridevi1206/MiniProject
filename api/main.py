@@ -10,7 +10,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 import pandas as pd
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -241,7 +241,16 @@ def incidents(limit: int = 2000) -> dict:
 
 
 @app.post("/retrain")
-async def retrain(file: UploadFile | None = File(default=None)) -> dict:
+async def retrain(request: Request, file: UploadFile | None = File(default=None)) -> dict:
+    # Log incoming request origin and headers to help debug browser failures
+    try:
+        origin = request.headers.get("origin") or request.headers.get("referer")
+        print(f"[retrain] incoming origin: {origin}")
+        # Print a few relevant headers
+        print("[retrain] headers:", {k: v for k, v in request.headers.items() if k.lower() in ['origin','referer','user-agent','content-type']})
+    except Exception:
+        pass
+
     if file is not None:
         if not file.filename or not file.filename.lower().endswith(".csv"):
             raise HTTPException(status_code=400, detail="Upload must be a CSV file")
