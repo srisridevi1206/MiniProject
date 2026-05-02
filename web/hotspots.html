@@ -103,6 +103,7 @@
           // summarize top crime types
           const typeCounts = {};
           const hourCounts = {};
+          const cityCounts = {};
           nearby.forEach(r => {
             const t = r.crime_type || 'unknown';
             typeCounts[t] = (typeCounts[t] || 0) + 1;
@@ -111,13 +112,19 @@
               const h = ts.getHours();
               hourCounts[h] = (hourCounts[h] || 0) + 1;
             }
+            if (r.city) {
+              cityCounts[r.city] = (cityCounts[r.city] || 0) + 1;
+            }
           });
 
           const topTypes = Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>`${x[0]} (${x[1]})`);
           const topHours = Object.entries(hourCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>`${x[0]}:00 (${x[1]})`);
+          const topCity = Object.entries(cityCounts).sort((a,b)=>b[1]-a[1])[0];
+          const cityLabel = topCity ? topCity[0] : 'Unknown Location';
 
           const popupHtml = `
             <div style="min-width:220px">
+              <div><strong>Location:</strong> ${cityLabel}</div>
               <div><strong>Risk:</strong> ${score.toFixed(6)}</div>
               <div><strong>Nearby incidents:</strong> ${nearby.length}</div>
               <div><strong>Top crime types:</strong><br>${topTypes.join('<br>') || 'None'}</div>
@@ -134,7 +141,7 @@
             stroke: false,
             fillOpacity: fillOpacity,
             fillColor: '#ff3d3d'
-          }).bindPopup(popupHtml).bindTooltip(`Risk: ${score.toFixed(6)}`).addTo(map);
+          }).bindPopup(popupHtml).bindTooltip(`${cityLabel} • Risk: ${score.toFixed(6)}`).addTo(map);
         });
 
         // add legend
