@@ -52,7 +52,7 @@
   </div>
 
   <script>
-    const API_BASE = window.location.port === '5500' ? 'http://127.0.0.1:8000' : '';
+    const API_BASE = 'http://127.0.0.1:8000';
     const map = L.map('map').setView([17.385, 78.486], 11);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
 
@@ -63,19 +63,90 @@
         const grid = await gridResp.json();
         const rows = (grid.rows || []).sort((a, b) => Number(b.risk_score) - Number(a.risk_score)).slice(0, 450);
 
+        // load incidents once to allow enrichment of hotspots with crime types & times
+        let incidents = [];
+        try {
+          const incResp = await fetch(`${API_BASE}/incidents?limit=5000`);
+          if (incResp.ok) incidents = (await incResp.json()).rows || [];
+        } catch (_) { incidents = []; }
+
         if (rows.length > 0) {
-          map.setView([Number(rows[0].latitude), Number(rows[0].longitude)], 11);
+          map.setView([Number(rows[0].latitude), Number(rows[0].longitude)], 12);
         }
 
+        // helper: haversine distance in km
+        function haversine(lat1, lon1, lat2, lon2) {
+          const toRad = x => x * Math.PI / 180;
+          const R = 6371; // km
+          const dLat = toRad(lat2 - lat1);
+          const dLon = toRad(lon2 - lon1);
+          const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+          return R * 2 * Math.asin(Math.sqrt(a));
+        }
+
+        // compute max risk_score for normalization
+        const maxScore = Math.max(...rows.map(r => Number(r.risk_score) || 0), 1e-8);
+
         rows.forEach(cell => {
-          const score = Number(cell.risk_score);
-          L.circle([Number(cell.latitude), Number(cell.longitude)], {
-            radius: 80,
+          const score = Number(cell.risk_score) || 0;
+          const lat = Number(cell.latitude), lon = Number(cell.longitude);
+
+          // find nearby incidents within 0.6 km
+          const nearby = incidents.filter(r => {
+            const rlat = Number(r.latitude), rlon = Number(r.longitude);
+            if (Number.isFinite(rlat) && Number.isFinite(rlon)) {
+              return haversine(lat, lon, rlat, rlon) <= 0.6;
+            }
+            return false;
+          });
+
+          // summarize top crime types
+          const typeCounts = {};
+          const hourCounts = {};
+          nearby.forEach(r => {
+            const t = r.crime_type || 'unknown';
+            typeCounts[t] = (typeCounts[t] || 0) + 1;
+            const ts = new Date(r.timestamp);
+            if (!isNaN(ts)) {
+              const h = ts.getHours();
+              hourCounts[h] = (hourCounts[h] || 0) + 1;
+            }
+          });
+
+          const topTypes = Object.entries(typeCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>`${x[0]} (${x[1]})`);
+          const topHours = Object.entries(hourCounts).sort((a,b)=>b[1]-a[1]).slice(0,3).map(x=>`${x[0]}:00 (${x[1]})`);
+
+          const popupHtml = `
+            <div style="min-width:220px">
+              <div><strong>Risk:</strong> ${score.toFixed(6)}</div>
+              <div><strong>Nearby incidents:</strong> ${nearby.length}</div>
+              <div><strong>Top crime types:</strong><br>${topTypes.join('<br>') || 'None'}</div>
+              <div style="margin-top:6px"><strong>Peak hours:</strong><br>${topHours.join('<br>') || 'Unknown'}</div>
+            </div>`;
+
+          // normalize score to visual properties
+          const normalized = maxScore > 0 ? Math.min(1, score / maxScore) : 0;
+          const fillOpacity = 0.15 + 0.75 * normalized; // range 0.15 - 0.9
+          const radiusMeters = Math.round(150 + 350 * normalized); // 150 - 500 m
+
+          L.circle([lat, lon], {
+            radius: radiusMeters,
             stroke: false,
-            fillOpacity: Math.min(0.85, score / 10),
+            fillOpacity: fillOpacity,
             fillColor: '#ff3d3d'
-          }).bindTooltip(`Risk: ${score.toFixed(4)}`).addTo(map);
+          }).bindPopup(popupHtml).bindTooltip(`Risk: ${score.toFixed(6)}`).addTo(map);
         });
+
+        // add legend
+        const legend = L.control({position: 'bottomright'});
+        legend.onAdd = function () {
+          const div = L.DomUtil.create('div', 'legend card');
+          div.style.padding = '8px';
+          div.style.fontSize = '0.85rem';
+          div.innerHTML = '<strong>Hotspot legend</strong><br/><div style="margin-top:6px">Circle opacity ∝ risk score.<br/>Click circle for nearby incident summary.</div>';
+          return div;
+        };
+        legend.addTo(map);
       } catch (e) {
         alert(`Failed to load hotspots: ${e.message}`);
       }
