@@ -8,7 +8,7 @@
 
   var apiBase = "";
   if (isLocal) {
-    apiBase = "http://127.0.0.1:5000";
+    apiBase = "http://127.0.0.1:8000";
   } else if (isGithubPages) {
     apiBase = RENDER_API_BASE;
   }
